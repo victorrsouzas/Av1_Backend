@@ -1,13 +1,15 @@
 package com.example.demo.resources;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Optional;
+import java.util.*;
 
 import com.example.demo.dto.MeioPagamentosDto;
+import com.example.demo.models.Emprestimo;
 import org.aspectj.weaver.ast.Or;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -24,10 +26,17 @@ import javax.validation.Valid;
 @RequestMapping("/MeioPagamento")
 public class MeioPagamentoResource{
 	
-	private final MeioPagamentoRepository repositorio;
+	@Autowired
+	MeioPagamentoRepository repositorio;
 
-	public MeioPagamentoResource(MeioPagamentoRepository repositorio) {
-		this.repositorio = repositorio;
+	private Sort.Direction getSortDirection(String direction) {
+		if (direction.equals("asc")) {
+			return Sort.Direction.ASC;
+		} else if (direction.equals("desc")) {
+			return Sort.Direction.DESC;
+		}
+
+		return Sort.Direction.ASC;
 	}
 
 	//	private MeioPagamentoRepository meiopagamentoRepository;
@@ -51,11 +60,98 @@ public class MeioPagamentoResource{
 		return repositorio.findAll();
 	}
 
-	@GetMapping("/{descricao}")
-	public ResponseEntity<Optional<MeioPagamentos>> getPaymentMethod(@PathVariable("descricao") String descricao) {
-		return new ResponseEntity<>(repositorio.findPaymentMethodByDescricao(descricao), HttpStatus.OK);
+	@GetMapping("/consulta1")
+	public ResponseEntity<Map<String, Object>> getmeioPagamentosByCodigoAndDescricao(@RequestParam String codigo,
+																 @RequestParam String descricao, @RequestParam(defaultValue = "0") int page,
+																					  @RequestParam(defaultValue = "10") int size,@RequestParam(defaultValue = "id,asc") String[] sort) {
+		try{
+			List<Sort.Order> orders = new ArrayList<Sort.Order>();
+
+			if (sort[0].contains(",")) {
+				for (String sortOrder : sort) {
+					String[] _sort = sortOrder.split(",");
+					orders.add(new Sort.Order(getSortDirection(_sort[1]), _sort[0]));
+				}
+			} else {
+				// sort=[field, direction]
+				orders.add(new Sort.Order(getSortDirection(sort[1]), sort[0]));
+			}
+
+			List<MeioPagamentos> meioPagamentos = new ArrayList<MeioPagamentos>();
+			Pageable pagingSort = PageRequest.of(page, size, Sort.by(orders));
+
+			Page<MeioPagamentos> pageTuts;
+			if (codigo == null || descricao == null)
+				pageTuts = repositorio.findAll(pagingSort);
+			else
+				pageTuts = repositorio.findByCodigoAndDescricao(codigo, descricao, pagingSort);
+
+			meioPagamentos = pageTuts.getContent();
+
+			if (meioPagamentos.isEmpty()) {
+				return new ResponseEntity<>(HttpStatus.NO_CONTENT);
+			}
+
+			Map<String, Object> response1 = new HashMap<>();
+			response1.put("Meio Pagamentos", meioPagamentos);
+			response1.put("currentPage", pageTuts.getNumber());
+			response1.put("totalItems", pageTuts.getTotalElements());
+			response1.put("totalPages", pageTuts.getTotalPages());
+
+			return new ResponseEntity<>(response1, HttpStatus.OK);
+		} catch (Exception e) {
+			return new ResponseEntity<>(null, HttpStatus.INTERNAL_SERVER_ERROR);
+		}
 	}
-	
+
+
+	@GetMapping("/consulta2")
+	public ResponseEntity<Map<String, Object>> getAllTutorialsPage(
+			@RequestParam(required = false) String codigo,
+			@RequestParam(defaultValue = "0") int page,
+			@RequestParam(defaultValue = "10") int size,
+			@RequestParam(defaultValue = "codigo,desc") String[] sort) {
+
+		try {
+			List<Sort.Order> orders = new ArrayList<Sort.Order>();
+
+			if (sort[0].contains(",")) {
+				for (String sortOrder : sort) {
+					String[] _sort = sortOrder.split(",");
+					orders.add(new Sort.Order(getSortDirection(_sort[1]), _sort[0]));
+				}
+			} else {
+				// sort=[field, direction]
+				orders.add(new Sort.Order(getSortDirection(sort[1]), sort[0]));
+			}
+
+			List<MeioPagamentos> meioPagamentos = new ArrayList<MeioPagamentos>();
+			Pageable pagingSort = PageRequest.of(page, size, Sort.by(orders));
+
+			Page<MeioPagamentos> pageTuts;
+			if (codigo == null)
+				pageTuts = repositorio.findAll(pagingSort);
+			else
+				pageTuts = repositorio.findByCodigoContaining(codigo, pagingSort);
+
+			meioPagamentos = pageTuts.getContent();
+
+			if (meioPagamentos.isEmpty()) {
+				return new ResponseEntity<>(HttpStatus.NO_CONTENT);
+			}
+
+			Map<String, Object> response = new HashMap<>();
+			response.put("Meio Pagamentos", meioPagamentos);
+			response.put("currentPage", pageTuts.getNumber());
+			response.put("totalItems", pageTuts.getTotalElements());
+			response.put("totalPages", pageTuts.getTotalPages());
+
+			return new ResponseEntity<>(response, HttpStatus.OK);
+		} catch (Exception e) {
+			return new ResponseEntity<>(null, HttpStatus.INTERNAL_SERVER_ERROR);
+		}
+	}
+
 	@DeleteMapping
 	public void excluir(MeioPagamentos meiopagamento) {
 		repositorio.delete(meiopagamento);
